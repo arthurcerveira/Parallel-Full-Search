@@ -3,13 +3,16 @@
 
 
 void readFrames(FILE *fp, unsigned char ** frame1, unsigned char ** frame2, int width, int height);
-
+void fullSearch(unsigned char ** frame1, unsigned char ** frame2, unsigned char ** Rv, unsigned char ** Ra);
 
 int main(int argc, char *argv[]) {
     int width = 640;
     int height = 360;
     unsigned char **frame1;
     unsigned char **frame2;
+    unsigned char **Rv;
+    unsigned char **Ra;
+
 
     frame1 = (unsigned char**)malloc(sizeof *frame1 * height);
     frame2 = (unsigned char**)malloc(sizeof *frame2 * height);
@@ -21,7 +24,7 @@ int main(int argc, char *argv[]) {
     }
 
     readFrames(fp, frame1, frame2, width, height);
-
+    fullSearch(frame1, frame2, Rv, Ra);
     // Close file
     fclose(fp);
 
@@ -75,4 +78,12 @@ void readFrames(FILE *fp, unsigned char ** frame1, unsigned char ** frame2, int 
         frame2[i] = (unsigned char*)malloc(sizeof *frame2[i] * width);
         fread(frame2[i], sizeof(unsigned char), width, fp);
     }
+}
+
+void fullSearch(unsigned char ** frame1, unsigned char ** frame2, unsigned char ** Rv, unsigned char ** Ra) {
+    //alocar os vetore Rv e Ra
+    //pra cada bloco do frame atual (frame2)
+    //comparar onde ele está no frame referencia (frame1)
+    //se encontrar guardar nos vetores Rv e Ra
+    //fazer isso pra todos os frames seguintes até o fim seguinte
 }
