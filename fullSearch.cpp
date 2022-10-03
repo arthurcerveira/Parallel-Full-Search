@@ -88,32 +88,81 @@ void readFrames(FILE *fp, unsigned char **frame1, unsigned char **frame2, int wi
 
 void fullSearch(unsigned char **frame1, unsigned char **frame2, unsigned char **Rv, unsigned char **Ra)
 {
-    int i, j, k, l, m, n, aux = 0;
+    int i, j, k, l, m, n;
     int width = 640;
     int height = 360;
+
+    int maxBlocks = width * height / 64;
+
+    int totalDifference = 0;
+    int minTotalDifference = 100000;
+
+    int position = 0;
+    int skip = 0;
+
+    unsigned char *temp;
+
     // alocar os vetore Rv e Ra
-    Rv = (unsigned char **)malloc(sizeof *Rv * 8 * 8);
-    Ra = (unsigned char **)malloc(sizeof *Ra * 8 * 8);
+    Rv = (unsigned char **)malloc(sizeof *Rv * maxBlocks);
+    Ra = (unsigned char **)malloc(sizeof *Ra * maxBlocks);
     // pra cada bloco do frame atual (frame2)
     // comparar onde ele está no frame referencia (frame1)
-    for (i = 0; i < height; i = i+9) {
-        for (j = 0; j < width; j = j+9) {
-            for (k = 0; k < height;k = k+9) {
-                for (l = 0; l < width; l = l+9) {
+
+    // para cada bloco do frame atual (2)
+    for (i = 0; i < height; i = i+8) {
+        for (j = 0; j < width; j = j+8) {
+            // printf("Bloco atual I :%d, J: %d\n\n", i, j);
+            temp = (unsigned char *)malloc(sizeof *temp * 2);
+            minTotalDifference = 100000;
+
+            // para cada bloco do frame de referencia (1)
+            for (k = 0; k < height;k = k+8) {
+                for (l = 0; l < width; l = l+8) {
+                    // printf("Bloco ref: K: %d L: %d\n", k, l);
+                    totalDifference = 0;
+
+                    // para cada pixel do bloco do frame de referencia
                     for (m = 0; m < 8; m++) {
                         for (n = 0; n < 8; n++) {
-                            if(frame1[i+m][j+n] == frame2[k+m][l+n]) {
-                                aux = aux + 1;
-                            }
+                            //Não precisa ser exatamente igual, só o mais próximo possível
+                            totalDifference += abs(frame2[i+m][j+n] - frame1[k+m][l+n]);
+                            // printf("%d\n%d\n", totalDifference, minTotalDifference);
                         }
                     }
-                    if(aux==7) printf("i: %d-%d, j: %d-%d\nk:%d-%d, l:%d-%d\nTrue\n", i,(i+8), j,(j+8), k,(k+8), l,(l+8));
-                    aux = 0;
+
+                    // Se essa diferenca for a menor diferenca
+                    if (totalDifference <= minTotalDifference) {
+                        // Atualiza a menor diferenca
+                        minTotalDifference = totalDifference;
+                        // Adiciona no temp a posicao
+                        temp[0] = i;
+                        temp[1] = j;
+
+                    }
+
+                    if (minTotalDifference == 0) {
+                        skip = 1;
+                        break;
+                    }
+                
+                if (skip) {
+                    printf("i: %d-%d, j: %d-%d\nk:%d-%d, l:%d-%d\nTrue\n", i,(i+8), j,(j+8), k,(k+8), l,(l+8));
+                    skip = 0;
+                    break;
+                }
 
                 }
             }
+
+            if(minTotalDifference < 3) {
+                printf("i: %d-%d, j: %d-%d\nk:%d-%d, l:%d-%d\nTrue\n", i,(i+8), j,(j+8), k,(k+8), l,(l+8));
+                printf(":O :O :O :O :O :O :O :O :O :O :O :O :O :O :O :O :O :O :O :O :O :O :O :O :O :O :O :O :O\n");
+                // se encontrar guardar nos vetores Rv e Ra
+                int posicao = (i * j) / 8;
+
+                *Rv[posicao] = *temp;
+            }                
         }
     }
-    // se encontrar guardar nos vetores Rv e Ra
     // fazer isso pra todos os frames seguintes até o fim
 }
