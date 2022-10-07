@@ -91,25 +91,50 @@ void fullSearch(unsigned char **frame1, unsigned char **frame2, unsigned char **
     int i, j, k, l, m, n, aux = 0;
     int width = 640;
     int height = 360;
+
+    int maxBlocks = width * height / 64;
+
+    int position;
+
+    int encontrou = 0;
+
+    unsigned char * temp;
+ 
     // alocar os vetore Rv e Ra
-    Rv = (unsigned char **)malloc(sizeof *Rv * 8 * 8);
-    Ra = (unsigned char **)malloc(sizeof *Ra * 8 * 8);
-    // pra cada bloco do frame atual (frame2)
-    // comparar onde ele está no frame referencia (frame1)
-    for (i = 0; i < height; i = i+9) {
-        for (j = 0; j < width; j = j+9) {
-            for (k = 0; k < height;k = k+9) {
-                for (l = 0; l < width; l = l+9) {
+    Rv = (unsigned char **)malloc(sizeof *Rv * maxBlocks);
+    Ra = (unsigned char **)malloc(sizeof *Ra * maxBlocks);
+
+    // percorre blocos do frame 2 (atual)
+    for (i = 0; i < height; i = i+8) {
+        for (j = 0; j < width; j = j+8) {
+
+            // percorre blocos do frame 1 (referencia)
+            for (k = 0; k < height;k = k+8) {
+                for (l = 0; l < width; l = l+8) {
+
+                    // percorre pixels do bloco de referencia
                     for (m = 0; m < 8; m++) {
                         for (n = 0; n < 8; n++) {
-                            if(frame1[i+m][j+n] == frame2[k+m][l+n]) {
+                            // compara pixels do frame atual com referencia
+                            if(frame2[i+m][j+n] == frame1[k+m][l+n]) {
                                 aux = aux + 1;
                             }
                         }
                     }
-                    if(aux==7) printf("i: %d-%d, j: %d-%d\nk:%d-%d, l:%d-%d\nTrue\n", i,(i+8), j,(j+8), k,(k+8), l,(l+8));
+                    if(aux==7) {
+                        encontrou = 1;
+                        break;
+                    }
                     aux = 0;
+                }
+                if (encontrou) {
+                    printf("i: %d-%d, j: %d-%d\nk:%d-%d, l:%d-%d\nTrue\n", i,(i+8), j,(j+8), k,(k+8), l,(l+8));
+                    encontrou = 0;
 
+                    // guarda nos vetores
+
+
+                    break;
                 }
             }
         }
