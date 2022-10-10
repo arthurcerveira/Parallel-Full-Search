@@ -2,7 +2,7 @@
 #include <cstdlib>
 
 void readFrames(FILE *fp, unsigned char **frame1, unsigned char **frame2, int width, int height);
-void fullSearch(unsigned char **frame1, unsigned char **frame2, unsigned char **Rv, unsigned char **Ra);
+int fullSearch(unsigned char **frame1, unsigned char **frame2, unsigned char **Rv, unsigned char **Ra);
 
 int main(int argc, char *argv[])
 {
@@ -12,6 +12,8 @@ int main(int argc, char *argv[])
     unsigned char **frame2;
     unsigned char **Rv;
     unsigned char **Ra;
+    int maxBlocks = width * height / 64;
+    int size;
 
     frame1 = (unsigned char **)malloc(sizeof *frame1 * height);
     frame2 = (unsigned char **)malloc(sizeof *frame2 * height);
@@ -24,41 +26,23 @@ int main(int argc, char *argv[])
     }
 
     readFrames(fp, frame1, frame2, width, height);
-    fullSearch(frame1, frame2, Rv, Ra);
+
+    // alocar os vetore Rv e Ra
+    Rv = (unsigned char **)malloc(sizeof *Rv * maxBlocks);
+    Ra = (unsigned char **)malloc(sizeof *Ra * maxBlocks);
+
+    size = fullSearch(frame1, frame2, Rv, Ra);
     // Close file
     fclose(fp);
 
-    // Write frame to image file
-    FILE *f = fopen("frame1.ppm", "wb");
-    fprintf(f, "P6\n%i %i 255\n", width, height);
+    printf("Chegou\n\n");
+    // printf("Ra: (%d, %d)\n", Ra[0][0], Ra[1][1]);
+    // printf("Rv: (%d, %d)\n\n", Rv[0][0], Rv[1][1]);
 
-    for (int x = 0; x < height; x++)
-    {
-        for (int y = 0; y < width; y++)
-        {
-            fputc(frame1[x][y], f);
-            fputc(frame1[x][y], f);
-            fputc(frame1[x][y], f);
-        }
+    for (int i = 0; i < size; i++) {
+        printf("Ra: (%d, %d)\n", Ra[i][0], Ra[i][1]);
+        printf("Rv: (%d, %d)\n\n", Rv[i][0], Rv[i][1]);
     }
-
-    fclose(f);
-
-    FILE *f2 = fopen("frame2.ppm", "wb");
-
-    fprintf(f2, "P6\n%i %i 255\n", width, height);
-
-    for (int x = 0; x < height; x++)
-    {
-        for (int y = 0; y < width; y++)
-        {
-            fputc(frame2[x][y], f2);
-            fputc(frame2[x][y], f2);
-            fputc(frame2[x][y], f2);
-        }
-    }
-
-    fclose(f2);
 }
 
 void readFrames(FILE *fp, unsigned char **frame1, unsigned char **frame2, int width, int height)
@@ -86,24 +70,16 @@ void readFrames(FILE *fp, unsigned char **frame1, unsigned char **frame2, int wi
     }
 }
 
-void fullSearch(unsigned char **frame1, unsigned char **frame2, unsigned char **Rv, unsigned char **Ra)
+int fullSearch(unsigned char **frame1, unsigned char **frame2, unsigned char **Rv, unsigned char **Ra)
 {
     int i, j, k, l, m, n, aux = 0;
     int width = 640;
     int height = 360;
 
-    int maxBlocks = width * height / 64;
-
-    int position;
+    int position = 0;
 
     int encontrou = 0;
-
-    unsigned char * temp;
  
-    // alocar os vetore Rv e Ra
-    Rv = (unsigned char **)malloc(sizeof *Rv * maxBlocks);
-    Ra = (unsigned char **)malloc(sizeof *Ra * maxBlocks);
-
     // percorre blocos do frame 2 (atual)
     for (i = 0; i < height; i = i+8) {
         for (j = 0; j < width; j = j+8) {
@@ -127,12 +103,24 @@ void fullSearch(unsigned char **frame1, unsigned char **frame2, unsigned char **
                     }
                     aux = 0;
                 }
+                aux = 0;
                 if (encontrou) {
-                    printf("i: %d-%d, j: %d-%d\nk:%d-%d, l:%d-%d\nTrue\n", i,(i+8), j,(j+8), k,(k+8), l,(l+8));
+                    // printf("i: %d-%d, j: %d-%d\nk:%d-%d, l:%d-%d\nTrue\n", i,(i+8), j,(j+8), k,(k+8), l,(l+8));
                     encontrou = 0;
 
                     // guarda nos vetores
+                    Rv[position] = (unsigned char *)malloc(sizeof *Rv[i] * 2);
+                    Rv[position][0] = k;
+                    Rv[position][1] = l;
 
+                    Ra[position] = (unsigned char *)malloc(sizeof *Ra[i] * 2);
+                    Ra[position][0] = i;
+                    Ra[position][1] = j;
+
+                    // printf("Ra [%d]: (%d, %d)\n", position, Ra[position][0], Ra[position][1]);
+                    // printf("Rv [%d]: (%d, %d)\n", position, Rv[position][0], Rv[position][1]);
+
+                    position++;
 
                     break;
                 }
@@ -141,4 +129,6 @@ void fullSearch(unsigned char **frame1, unsigned char **frame2, unsigned char **
     }
     // se encontrar guardar nos vetores Rv e Ra
     // fazer isso pra todos os frames seguintes até o fim
-}
+
+    return position;
+ }
