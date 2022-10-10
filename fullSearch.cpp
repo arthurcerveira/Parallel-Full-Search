@@ -1,5 +1,6 @@
 #include <stdio.h>
 #include <cstdlib>
+#include <omp.h>
 
 void readFrames(FILE *fp, unsigned char **frame1, unsigned char **frame2, int width, int height);
 int fullSearch(unsigned char **frame1, unsigned char **frame2, unsigned char **Rv, unsigned char **Ra);
@@ -14,6 +15,9 @@ int main(int argc, char *argv[])
     unsigned char **Ra;
     int maxBlocks = width * height / 64;
     int size;
+    double begin, end;
+    
+    begin = omp_get_wtime();
 
     frame1 = (unsigned char **)malloc(sizeof *frame1 * height);
     frame2 = (unsigned char **)malloc(sizeof *frame2 * height);
@@ -32,17 +36,16 @@ int main(int argc, char *argv[])
     Ra = (unsigned char **)malloc(sizeof *Ra * maxBlocks);
 
     size = fullSearch(frame1, frame2, Rv, Ra);
+    
+    end = omp_get_wtime();
     // Close file
     fclose(fp);
-
-    printf("Chegou\n\n");
-    // printf("Ra: (%d, %d)\n", Ra[0][0], Ra[1][1]);
-    // printf("Rv: (%d, %d)\n\n", Rv[0][0], Rv[1][1]);
 
     for (int i = 0; i < size; i++) {
         printf("Ra: (%d, %d)\n", Ra[i][0], Ra[i][1]);
         printf("Rv: (%d, %d)\n\n", Rv[i][0], Rv[i][1]);
     }
+    printf("Tempo de execução: %.2f segundos\n", end-begin);
 }
 
 void readFrames(FILE *fp, unsigned char **frame1, unsigned char **frame2, int width, int height)
@@ -79,52 +82,66 @@ int fullSearch(unsigned char **frame1, unsigned char **frame2, unsigned char **R
     int position = 0;
 
     int encontrou = 0;
- 
+
+    int totalDifference = 0;
+    int minTotalDifference = 16500;
+
+    int differenceTreshold = 100;
+
+    int minK, minL;
+
+    int skip = 0;
+
     // percorre blocos do frame 2 (atual)
     for (i = 0; i < height; i = i+8) {
         for (j = 0; j < width; j = j+8) {
+            minTotalDifference = 16500;
+            minK = 0;
+            minL = 0;
 
             // percorre blocos do frame 1 (referencia)
+            // Parallel For 
             for (k = 0; k < height;k = k+8) {
                 for (l = 0; l < width; l = l+8) {
+                    totalDifference = 0;
 
                     // percorre pixels do bloco de referencia
-                    for (m = 0; m < 8; m++) {
-                        for (n = 0; n < 8; n++) {
-                            // compara pixels do frame atual com referencia
-                            if(frame2[i+m][j+n] == frame1[k+m][l+n]) {
-                                aux = aux + 1;
+                    // Parallel for com reduction para o totalDifference
+                    #pragma omp parallel
+                    {
+                        # pragma omp for reduction(+ : totalDifference) collapse(2)
+                        for (m = 0; m < 8; m++) {
+                            for (n = 0; n < 8; n++) {
+                                // compara pixels do frame atual com referencia
+                                totalDifference += abs(frame2[i+m][j+n] - frame1[k+m][l+n]);
                             }
                         }
                     }
-                    if(aux==7) {
-                        encontrou = 1;
-                        break;
-                    }
-                    aux = 0;
-                }
-                aux = 0;
-                if (encontrou) {
-                    // printf("i: %d-%d, j: %d-%d\nk:%d-%d, l:%d-%d\nTrue\n", i,(i+8), j,(j+8), k,(k+8), l,(l+8));
-                    encontrou = 0;
 
+                    // Seção critica de atualizar o minTotalDifference
+                    if (totalDifference < minTotalDifference) {
+                        minTotalDifference = totalDifference;
+                        minK = k;
+                        minL = l;
+                    }
+                }
+            }
+
+            if (minTotalDifference <= differenceTreshold) {
                     // guarda nos vetores
                     Rv[position] = (unsigned char *)malloc(sizeof *Rv[i] * 2);
-                    Rv[position][0] = k;
-                    Rv[position][1] = l;
+                    Rv[position][0] = minK;
+                    Rv[position][1] = minL;
 
                     Ra[position] = (unsigned char *)malloc(sizeof *Ra[i] * 2);
                     Ra[position][0] = i;
                     Ra[position][1] = j;
 
-                    // printf("Ra [%d]: (%d, %d)\n", position, Ra[position][0], Ra[position][1]);
-                    // printf("Rv [%d]: (%d, %d)\n", position, Rv[position][0], Rv[position][1]);
+                    // printf("Ra [%d]: (%d, %d) -> %d\n", position, Ra[position][0], Ra[position][1], minTotalDifference);
+                    // printf("Rv [%d]: (%d, %d) -> %d\n\n", position, Rv[position][0], Rv[position][1], minTotalDifference);
 
                     position++;
-
-                    break;
                 }
-            }
         }
     }
     // se encontrar guardar nos vetores Rv e Ra
