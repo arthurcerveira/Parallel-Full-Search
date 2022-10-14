@@ -35,7 +35,10 @@ int main(int argc, char *argv[])
     Rv = (unsigned char **)malloc(sizeof *Rv * maxBlocks);
     Ra = (unsigned char **)malloc(sizeof *Ra * maxBlocks);
 
-    size = fullSearch(frame1, frame2, Rv, Ra);
+    #pragma omp parallel
+    {
+        size = fullSearch(frame1, frame2, Rv, Ra);
+    }
     
     end = omp_get_wtime();
     // Close file
@@ -93,6 +96,7 @@ int fullSearch(unsigned char **frame1, unsigned char **frame2, unsigned char **R
     int skip = 0;
 
     // percorre blocos do frame 2 (atual)
+    # pragma omp for collapse(2)
     for (i = 0; i < height; i = i+8) {
         for (j = 0; j < width; j = j+8) {
             minTotalDifference = 16500;
@@ -100,23 +104,20 @@ int fullSearch(unsigned char **frame1, unsigned char **frame2, unsigned char **R
             minL = 0;
 
             // percorre blocos do frame 1 (referencia)
-            // Parallel For 
+            // Parallel For
             for (k = 0; k < height;k = k+8) {
                 for (l = 0; l < width; l = l+8) {
                     totalDifference = 0;
 
                     // percorre pixels do bloco de referencia
                     // Parallel for com reduction para o totalDifference
-                    #pragma omp parallel
-                    {
-                        # pragma omp for reduction(+ : totalDifference) collapse(2)
+                        // # pragma omp for collapse(2)
                         for (m = 0; m < 8; m++) {
                             for (n = 0; n < 8; n++) {
                                 // compara pixels do frame atual com referencia
                                 totalDifference += abs(frame2[i+m][j+n] - frame1[k+m][l+n]);
                             }
                         }
-                    }
 
                     // Seção critica de atualizar o minTotalDifference
                     if (totalDifference < minTotalDifference) {
