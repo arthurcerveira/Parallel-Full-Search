@@ -3,7 +3,7 @@
 #include <omp.h>
 
 void readFrame(FILE *fp, unsigned char **frame, int width, int height);
-int fullSearch(unsigned char **frame1, unsigned char **frame2, unsigned char **Rv, unsigned char **Ra);
+int fullSearch(unsigned char **frame1, unsigned char **frame2, unsigned int **Rv, unsigned int **Ra);
 
 int main(int argc, char *argv[])
 {
@@ -12,8 +12,8 @@ int main(int argc, char *argv[])
     unsigned char **frameRef;
     unsigned char **frameAtual;
 
-    unsigned char **Rv;
-    unsigned char **Ra;
+    unsigned int **Rv;
+    unsigned int **Ra;
     int maxBlocks = width * height / 64;
     int size;
     double begin, end;
@@ -32,17 +32,17 @@ int main(int argc, char *argv[])
 
     readFrame(fp, frameRef, width, height);
 
-    for (int frameI=0; frameI < 10 ; frameI++){
+    for (int frameI=0; frameI < 1 ; frameI++){
         readFrame(fp, frameAtual, width, height);
 
         // alocar os vetore Rv e Ra
-        Rv = (unsigned char **)malloc(sizeof *Rv * maxBlocks);
-        Ra = (unsigned char **)malloc(sizeof *Ra * maxBlocks);
+        Rv = (unsigned int **)malloc(sizeof *Rv * maxBlocks);
+        Ra = (unsigned int **)malloc(sizeof *Ra * maxBlocks);
 
-        #pragma omp parallel
-        {
+        // #pragma omp parallel
+        // {
             size = fullSearch(frameRef, frameAtual, Rv, Ra);
-        }
+        // }
 
         // for (int i = 0; i < size; i++) {
         //     printf("Ra: (%d, %d)\n", Ra[i][0], Ra[i][1]);
@@ -76,7 +76,7 @@ void readFrame(FILE *fp, unsigned char **frame, int width, int height)
 }
 
 
-int fullSearch(unsigned char **frame1, unsigned char **frame2, unsigned char **Rv, unsigned char **Ra)
+int fullSearch(unsigned char **frame1, unsigned char **frame2, unsigned int **Rv, unsigned int **Ra)
 {
     int i, j, k, l, m, n, aux = 0;
     int width = 640;
@@ -94,7 +94,7 @@ int fullSearch(unsigned char **frame1, unsigned char **frame2, unsigned char **R
     int skip = 0;
 
     // percorre blocos do frame 2 (atual)
-    # pragma omp for collapse(2) nowait
+    // # pragma omp for collapse(2) nowait
     for (i = 0; i < height; i = i+8) {
         for (j = 0; j < width; j = j+8) {
             minTotalDifference = 16500;
@@ -127,16 +127,16 @@ int fullSearch(unsigned char **frame1, unsigned char **frame2, unsigned char **R
             }
 
             // guarda bloco com menor diferenca nos vetores
-            Rv[position] = (unsigned char *)malloc(sizeof *Rv[i] * 2);
+            Rv[position] = (unsigned int *)malloc(sizeof *Rv[position] * 2);
             Rv[position][0] = minK;
             Rv[position][1] = minL;
 
-            Ra[position] = (unsigned char *)malloc(sizeof *Ra[i] * 2);
+            Ra[position] = (unsigned int *)malloc(sizeof *Ra[position] * 2);
             Ra[position][0] = i;
             Ra[position][1] = j;
 
-            // printf("Ra [%d]: (%d, %d) -> %d\n", position, Ra[position][0], Ra[position][1], minTotalDifference);
-            // printf("Rv [%d]: (%d, %d) -> %d\n\n", position, Rv[position][0], Rv[position][1], minTotalDifference);
+            printf("Ra [%d]: (%d, %d) -> %d\n", position, Ra[position][0], Ra[position][1], minTotalDifference);
+            printf("Rv [%d]: (%d, %d) -> %d\n\n", position, Rv[position][0], Rv[position][1], minTotalDifference);
 
             position++;
         }
