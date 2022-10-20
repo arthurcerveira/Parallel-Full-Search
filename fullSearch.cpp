@@ -35,9 +35,7 @@ int main(int argc, char *argv[])
 
     #pragma omp parallel
     {
-        #pragma omp single
-        {
-            for (int frameI=0; frameI < 1 ; frameI++){
+            for (int frameI=0; frameI < 5 ; frameI++){
                 readFrame(fp, frameAtual, width, height);
 
                 // alocar os vetore Rv e Ra
@@ -45,14 +43,13 @@ int main(int argc, char *argv[])
                 Ra = (unsigned int **)malloc(sizeof *Ra * maxBlocks);
                     size = fullSearch(frameRef, frameAtual, Rv, Ra);
             }
-        }
     }
     end = omp_get_wtime();
 
-        for (int i = 0; i < size; i++) {
-            printf("Ra: [%d] (%d, %d)\n", i, Ra[i][0], Ra[i][1]);
-            printf("Rv: [%d] (%d, %d)\n\n", i, Rv[i][0], Rv[i][1]);
-        }
+        // for (int i = 0; i < 5; i++) {
+        //     printf("Ra: [%d] (%d, %d)\n", i, Ra[i][0], Ra[i][1]);
+        //     printf("Rv: [%d] (%d, %d)\n\n", i, Rv[i][0], Rv[i][1]);
+        // }
 
     // Close file
     fclose(fp);
@@ -99,7 +96,7 @@ int fullSearch(unsigned char **frame1, unsigned char **frame2, unsigned int **Rv
     int skip = 0;
 
     // percorre blocos do frame 2 (atual)
-    //# pragma omp for collapse(2) nowait
+    # pragma omp for collapse(2) nowait
     for (i = 0; i < height/8; i++) {
         for (j = 0; j < width/8; j++) {
             posI = i*8;
@@ -107,9 +104,11 @@ int fullSearch(unsigned char **frame1, unsigned char **frame2, unsigned int **Rv
             minTotalDifference = 16500;
             minK = 0;
             minL = 0;
+            //printf("%d\n", omp_get_thread_num());
 
             // percorre blocos do frame 1 (referencia)
             // Parallel For
+            // # pragma omp for collapse(2) nowait
             for (k = 0; k < height; k = k+8) {
                 for (l = 0; l < width; l = l+8) {
                     totalDifference = 0;
@@ -134,17 +133,22 @@ int fullSearch(unsigned char **frame1, unsigned char **frame2, unsigned int **Rv
             }
 
             // guarda bloco com menor diferenca nos vetores
-            Rv[position] = (unsigned int *)malloc(sizeof *Rv[position] * 2);
-            Rv[position][0] = minK;
-            Rv[position][1] = minL;
+            #pragma omp critical
+            {
+                position = (i * width / 8) + j;
+                
+                Rv[position] = (unsigned int *)malloc(sizeof *Rv[position] * 2);
+                Rv[position][0] = minK;
+                Rv[position][1] = minL;
 
-            Ra[position] = (unsigned int *)malloc(sizeof *Ra[position] * 2);
-            Ra[position][0] = i;
-            Ra[position][1] = j;
-
-            position++;
+                Ra[position] = (unsigned int *)malloc(sizeof *Ra[position] * 2);
+                Ra[position][0] = posI;
+                Ra[position][1] = posJ;
+                // printf("Ra: [%d] (%d, %d)\n", position, Ra[position][0], Ra[position][1]);
+                // printf("Rv: [%d] (%d, %d)\n", position, Rv[position][0], Rv[position][1]);
+                // printf("%d\n\n", omp_get_thread_num());
+            }
         }
     }
-
     return position;
  }
