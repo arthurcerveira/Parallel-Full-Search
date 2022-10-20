@@ -17,7 +17,7 @@ int main(int argc, char *argv[])
     int maxBlocks = width * height / 64;
     int size;
     double begin, end;
-    omp_set_num_threads(8);
+    omp_set_num_threads(5);
     
     begin = omp_get_wtime();
 
@@ -33,26 +33,31 @@ int main(int argc, char *argv[])
 
     readFrame(fp, frameRef, width, height);
 
-    #pragma omp parallel
-    {
-            for (int frameI=0; frameI < 5 ; frameI++){
-                readFrame(fp, frameAtual, width, height);
+    #pragma omp parallel for shared(frameAtual, fp, width, height, maxBlocks) private(size) lastprivate(Ra, Rv)
+        for (int frameI=0; frameI < 5 ; frameI++){
+            printf("Inicio frame %d\n", frameI);
 
-                // alocar os vetore Rv e Ra
-                Rv = (unsigned int **)malloc(sizeof *Rv * maxBlocks);
-                Ra = (unsigned int **)malloc(sizeof *Ra * maxBlocks);
-                    size = fullSearch(frameRef, frameAtual, Rv, Ra);
-            }
-    }
+            readFrame(fp, frameAtual, width, height);
+
+            // alocar os vetore Rv e Ra
+            Rv = (unsigned int **)malloc(sizeof *Rv * maxBlocks);
+            Ra = (unsigned int **)malloc(sizeof *Ra * maxBlocks);
+            size = fullSearch(frameRef, frameAtual, Rv, Ra);
+
+            printf("Fim frame %d: %d blocos movimentados\n", frameI, size);
+        }
+
     end = omp_get_wtime();
 
-        // for (int i = 0; i < 5; i++) {
-        //     printf("Ra: [%d] (%d, %d)\n", i, Ra[i][0], Ra[i][1]);
-        //     printf("Rv: [%d] (%d, %d)\n\n", i, Rv[i][0], Rv[i][1]);
-        // }
-
+    printf("Fim da região paralela\n");
+    
     // Close file
     fclose(fp);
+
+    for (int i = 0; i < 100; i++) {
+        printf("Ra: [%d] (%d, %d)\n", i, Ra[i][0], Ra[i][1]);
+        printf("Rv: [%d] (%d, %d)\n\n", i, Rv[i][0], Rv[i][1]);
+    }
 
     printf("Tempo de execução: %.2f segundos\n", end-begin);
 }
@@ -96,7 +101,7 @@ int fullSearch(unsigned char **frame1, unsigned char **frame2, unsigned int **Rv
     int skip = 0;
 
     // percorre blocos do frame 2 (atual)
-    # pragma omp for collapse(2) nowait
+    // # pragma omp for collapse(2) nowait
     for (i = 0; i < height/8; i++) {
         for (j = 0; j < width/8; j++) {
             posI = i*8;
@@ -104,6 +109,7 @@ int fullSearch(unsigned char **frame1, unsigned char **frame2, unsigned int **Rv
             minTotalDifference = 16500;
             minK = 0;
             minL = 0;
+
             //printf("%d\n", omp_get_thread_num());
 
             // percorre blocos do frame 1 (referencia)
@@ -133,21 +139,19 @@ int fullSearch(unsigned char **frame1, unsigned char **frame2, unsigned int **Rv
             }
 
             // guarda bloco com menor diferenca nos vetores
-            #pragma omp critical
-            {
-                position = (i * width / 8) + j;
-                
-                Rv[position] = (unsigned int *)malloc(sizeof *Rv[position] * 2);
-                Rv[position][0] = minK;
-                Rv[position][1] = minL;
+            position = (i * width / 8) + j;
+            
+            Rv[position] = (unsigned int *)malloc(sizeof *Rv[position] * 2);
+            Rv[position][0] = minK;
+            Rv[position][1] = minL;
 
-                Ra[position] = (unsigned int *)malloc(sizeof *Ra[position] * 2);
-                Ra[position][0] = posI;
-                Ra[position][1] = posJ;
-                // printf("Ra: [%d] (%d, %d)\n", position, Ra[position][0], Ra[position][1]);
-                // printf("Rv: [%d] (%d, %d)\n", position, Rv[position][0], Rv[position][1]);
-                // printf("%d\n\n", omp_get_thread_num());
-            }
+            Ra[position] = (unsigned int *)malloc(sizeof *Ra[position] * 2);
+            Ra[position][0] = posI;
+            Ra[position][1] = posJ;
+            
+            // printf("Ra: [%d] (%d, %d)\n", position, Ra[position][0], Ra[position][1]);
+            // printf("Rv: [%d] (%d, %d)\n", position, Rv[position][0], Rv[position][1]);
+            // printf("%d\n\n", omp_get_thread_num());
         }
     }
     return position;
