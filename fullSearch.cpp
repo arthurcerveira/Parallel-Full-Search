@@ -23,7 +23,7 @@ int main(int argc, char *argv[]) {
     int maxBlocks = width * height / 64;
     int size;
     double begin, end;
-    omp_set_num_threads(1);
+    omp_set_num_threads(8);
 
     frameRef = (unsigned char **)malloc(sizeof *frameRef * height);
     frameAtual = (unsigned char **)malloc(sizeof *frameAtual * height);
@@ -125,10 +125,10 @@ int main(int argc, char *argv[]) {
         remove(fileName);
     }
     
-    for (int i = 0; i < 10; i++) {
-        printf("Ra: [%d] (%d, %d)\n", i, Ra[i][0], Ra[i][1]);
-        printf("Rv: [%d] (%d, %d)\n\n", i, Rv[i][0], Rv[i][1]);
-    }
+    // for (int i = 0; i < maxBlocks; i++) {
+    //     printf("Ra: [%d] (%d, %d)\n", i, Ra[i][0], Ra[i][1]);
+    //     printf("Rv: [%d] (%d, %d)\n\n", i, Rv[i][0], Rv[i][1]);
+    // }
 
     printf("Tempo de execução: %.2f segundos\n", end-begin);
 }
@@ -154,7 +154,7 @@ void readFrame(FILE *fp, unsigned char **frame, int width, int height) {
 
 int fullSearch(unsigned char **frame1, unsigned char **frame2, unsigned int **Rv, unsigned int **Ra) {
     int i, j, k, l, m, n, aux = 0;
-    int posI, posJ;
+    int posI, posJ, posK, posL;
     int width = 640;
     int height = 360;
 
@@ -166,7 +166,7 @@ int fullSearch(unsigned char **frame1, unsigned char **frame2, unsigned int **Rv
     int minK, minL;
 
     // percorre blocos do frame 2 (atual)
-    // # pragma omp for collapse(2) nowait
+    //# pragma omp for collapse(2) nowait
     for (i = 0; i < height/8; i++) {
         for (j = 0; j < width/8; j++) {
             posI = i*8;
@@ -179,26 +179,28 @@ int fullSearch(unsigned char **frame1, unsigned char **frame2, unsigned int **Rv
 
             // percorre blocos do frame 1 (referencia)
             // Parallel For
-            // # pragma omp for collapse(2) nowait
-            for (k = 0; k < height; k = k+8) {
-                for (l = 0; l < width; l = l+8) {
+            #pragma omp for collapse(2) nowait
+            for (k = 0; k < height/8; k++) {
+                for (l = 0; l < width/8; l++) {
                     totalDifference = 0;
+                    posK = i*8;
+                    posL = j*8;
 
                     // percorre pixels do bloco de referencia
                     // Parallel for com reduction para o totalDifference
-                        // # pragma omp for collapse(2)
+                        //# pragma omp for collapse(2)
                         for (m = 0; m < 8; m++) {
                             for (n = 0; n < 8; n++) {
                                 // compara pixels do frame atual com referencia
-                                totalDifference += abs(frame2[i+m][j+n] - frame1[k+m][l+n]);
+                                totalDifference += abs(frame2[posI+m][posJ+n] - frame1[posK+m][posL+n]);
                             }
                         }
 
                     // Seção critica de atualizar o minTotalDifference
                     if (totalDifference < minTotalDifference) {
                         minTotalDifference = totalDifference;
-                        minK = k;
-                        minL = l;
+                        minK = posK;
+                        minL = posL;
                     }
                 }
             }
