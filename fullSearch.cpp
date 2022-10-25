@@ -16,13 +16,13 @@ int main(int argc, char *argv[]) {
     // Array of frames
     unsigned char ***frames;
     int nFrames = 5;
-    int frameI;
+    int frameI = 0;
 
     unsigned int **Rv;
     unsigned int **Ra;
     int maxBlocks = width * height / 64;
-    int size;
-    double begin, end;
+    int size = 0;
+    double begin = 0, end = 0;
     omp_set_num_threads(8);
 
     frameRef = (unsigned char **)malloc(sizeof *frameRef * height);
@@ -42,7 +42,7 @@ int main(int argc, char *argv[]) {
     frames = (unsigned char ***)malloc(sizeof ***frames * nFrames);
 
     for (frameI = 0; frameI < nFrames; frameI++) {
-        frames[frameI] = (unsigned char **)malloc(sizeof *frames[frameI]);
+        frames[frameI] = (unsigned char **)malloc(sizeof *frames[frameI] * height);
         readFrame(fp, frames[frameI], width, height);
     }
 
@@ -125,10 +125,10 @@ int main(int argc, char *argv[]) {
         remove(fileName);
     }
     
-    // for (int i = 0; i < maxBlocks; i++) {
-    //     printf("Ra: [%d] (%d, %d)\n", i, Ra[i][0], Ra[i][1]);
-    //     printf("Rv: [%d] (%d, %d)\n\n", i, Rv[i][0], Rv[i][1]);
-    // }
+    for (int i = 0; i < 5; i++) {
+        printf("Ra: [%d] (%d, %d)\n", i, Ra[i][0], Ra[i][1]);
+        printf("Rv: [%d] (%d, %d)\n\n", i, Rv[i][0], Rv[i][1]);
+    }
 
     printf("Tempo de execução: %.2f segundos\n", end-begin);
 }
@@ -153,8 +153,8 @@ void readFrame(FILE *fp, unsigned char **frame, int width, int height) {
 
 
 int fullSearch(unsigned char **frame1, unsigned char **frame2, unsigned int **Rv, unsigned int **Ra) {
-    int i, j, k, l, m, n, aux = 0;
-    int posI, posJ, posK, posL;
+    int i, j, k, l, m, n;
+    int posI=0, posJ=0, posK=0, posL=0;
     int width = 640;
     int height = 360;
 
@@ -163,7 +163,7 @@ int fullSearch(unsigned char **frame1, unsigned char **frame2, unsigned int **Rv
     int totalDifference = 0;
     int minTotalDifference = 16500;
 
-    int minK, minL;
+    int minK=0, minL=0;
 
     // percorre blocos do frame 2 (atual)
     //# pragma omp for collapse(2) nowait
@@ -183,8 +183,8 @@ int fullSearch(unsigned char **frame1, unsigned char **frame2, unsigned int **Rv
             for (k = 0; k < height/8; k++) {
                 for (l = 0; l < width/8; l++) {
                     totalDifference = 0;
-                    posK = i*8;
-                    posL = j*8;
+                    posK = k*8;
+                    posL = l*8;
 
                     // percorre pixels do bloco de referencia
                     // Parallel for com reduction para o totalDifference
@@ -207,7 +207,7 @@ int fullSearch(unsigned char **frame1, unsigned char **frame2, unsigned int **Rv
 
             // guarda bloco com menor diferenca nos vetores
             position = (i * width / 8) + j;
-            
+
             Rv[position] = (unsigned int *)malloc(sizeof *Rv[position] * 2);
             Rv[position][0] = minK;
             Rv[position][1] = minL;
