@@ -5,7 +5,7 @@
 using namespace std;
 
 void readFrame(FILE *fp, unsigned char **frame, int width, int height);
-int fullSearch(unsigned char **frame1, unsigned char **frame2, unsigned int **Rv, unsigned int **Ra, int frameI);
+int fullSearch(unsigned char **frame1, unsigned char **frame2, unsigned int **Rv, unsigned int **Ra);
 
 int main(int argc, char *argv[]) {
     int width = 640;
@@ -15,14 +15,13 @@ int main(int argc, char *argv[]) {
     // Array de frames
     unsigned char ***frames;
     int nFrames = 20;
-    int frameI;
+    int frameI = 0;
 
     unsigned int **Rv;
     unsigned int **Ra;
     int maxBlocks = width * height / 64;
-    int size;
-    double begin, end;
-    
+    int size = 0;
+    double begin = 0, end = 0;
     omp_set_num_threads(8);
 
     frameRef = (unsigned char **)malloc(sizeof *frameRef * height);
@@ -147,9 +146,9 @@ void readFrame(FILE *fp, unsigned char **frame, int width, int height) {
 }
 
 
-int fullSearch(unsigned char **frame1, unsigned char **frame2, unsigned int **Rv, unsigned int **Ra, int frameI) {
-    int i, j, k, l, m, n = 0;
-    int posI, posJ, posK, posL;
+int fullSearch(unsigned char **frame1, unsigned char **frame2, unsigned int **Rv, unsigned int **Ra) {
+    int i, j, k, l, m, n;
+    int posI=0, posJ=0, posK=0, posL=0;
     int width = 640;
     int height = 360;
 
@@ -158,7 +157,7 @@ int fullSearch(unsigned char **frame1, unsigned char **frame2, unsigned int **Rv
     int totalDifference = 0;
     int minTotalDifference = 16500;
 
-    int minK, minL;
+    int minK=0, minL=0;
 
     // Percorre blocos do frame atual
     for (i = 0; i < height/8; i++) {
@@ -198,7 +197,7 @@ int fullSearch(unsigned char **frame1, unsigned char **frame2, unsigned int **Rv
 
             // Guarda bloco com menor diferenca nos vetores
             position = (i * width / 8) + j;
-            
+
             Rv[position] = (unsigned int *)malloc(sizeof *Rv[position] * 2);
             Rv[position][0] = minK;
             Rv[position][1] = minL;
