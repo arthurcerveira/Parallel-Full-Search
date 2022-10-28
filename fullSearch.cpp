@@ -1,5 +1,7 @@
 #include <stdio.h>
 #include <cstdlib>
+#include <fstream>
+#include <sys/stat.h>
 #include <omp.h>
 
 using namespace std;
@@ -28,6 +30,8 @@ int main(int argc, char *argv[]) {
     frameRef = (unsigned char **)malloc(sizeof *frameRef * height);
 
     FILE *fp = fopen("video_converted_640x360.yuv", "rb");
+
+    int status = mkdir("Ra_Rv",0777);
 
     if (fp == NULL)
     {
@@ -59,18 +63,25 @@ int main(int argc, char *argv[]) {
 
             // Escreve esses resultados em um arquivo binário
             char* fileName = new char[20];
+            char* fileName1 = new char[20];
+
             snprintf(fileName, 12, "%d.bin", frameI);
+            snprintf(fileName1, 18, "Ra_Rv/%d.txt", frameI);
 
             FILE * result = fopen(fileName, "wb");
+            FILE * result1 = fopen(fileName1, "w");
 
             for (int i = 0; i < size; i++) {
                 for (int j = 0; j < 2; j++) {
                     fwrite(&Ra[i][j], sizeof(Ra[i][j]), 1, result);
                     fwrite(&Rv[i][j], sizeof(Rv[i][j]), 1, result);
                 }
+                fprintf(result1, "Ra: (%d, %d)\n", Ra[i][0], Ra[i][1]);
+                fprintf(result1, "Rv: (%d, %d)\n\n", Rv[i][0], Rv[i][1]);
             }
 
             fclose(result);
+            fclose(result1);
         }
 
     end = omp_get_wtime();
@@ -165,7 +176,7 @@ int fullSearch(unsigned char **frame1, unsigned char **frame2, unsigned int **Rv
             minL = 0;
 
             // Percorre blocos do frame 1 (referencia)
-            #pragma omp for collapse(2) nowait schedule(static)
+            #pragma omp for collapse(2) nowait schedule(guided)
             for (k = 0; k < height/8; k++) {
                 for (l = 0; l < width/8; l++) {
                     totalDifference = 0;
