@@ -54,7 +54,7 @@ int main(int argc, char *argv[]) {
     // Para cada quadro, executa fullSearch
     #pragma omp parallel for shared(frames, fp, width, height, maxBlocks) private(size) lastprivate(Ra, Rv)
         for (frameI=0; frameI < nFrames ; frameI++){
-            printf("Processando frame %d\t[Thread %d]\n", frameI, omp_get_thread_num());
+            printf("Processando frame %d\t[Thread %d]\n", frameI + 1, omp_get_thread_num());
 
             // Rv e Ra guardam resultados do fullSearch
             Rv = (unsigned int **)malloc(sizeof *Rv * maxBlocks);
@@ -66,7 +66,7 @@ int main(int argc, char *argv[]) {
             char* fileName1 = new char[20];
 
             snprintf(fileName, 12, "%d.bin", frameI);
-            snprintf(fileName1, 18, "Ra_Rv/%d.txt", frameI);
+            snprintf(fileName1, 18, "Ra_Rv/%d.txt", frameI + 1);
 
             FILE * result = fopen(fileName, "wb");
             FILE * result1 = fopen(fileName1, "w");
