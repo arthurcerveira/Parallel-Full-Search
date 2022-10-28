@@ -22,6 +22,7 @@ int main(int argc, char *argv[]) {
     int maxBlocks = width * height / 64;
     int size = 0;
     double begin = 0, end = 0;
+
     omp_set_num_threads(8);
 
     frameRef = (unsigned char **)malloc(sizeof *frameRef * height);
@@ -44,24 +45,20 @@ int main(int argc, char *argv[]) {
         readFrame(fp, frames[frameI], width, height);
     }
 
-    // begin = omp_get_wtime();
-
-    // printf("Início da região paralela\n");
+    begin = omp_get_wtime();
     
     // Para cada quadro, executa fullSearch
     #pragma omp parallel for shared(frames, fp, width, height, maxBlocks) private(size) lastprivate(Ra, Rv)
         for (frameI=0; frameI < nFrames ; frameI++){
-            printf("Inicio frame %d.\n", frameI);
-            // printf("Thread %d\n", omp_get_thread_num());
+            printf("Processando frame %d\t[Thread %d]\n", frameI, omp_get_thread_num());
 
             // Rv e Ra guardam resultados do fullSearch
             Rv = (unsigned int **)malloc(sizeof *Rv * maxBlocks);
             Ra = (unsigned int **)malloc(sizeof *Ra * maxBlocks);
-            size = fullSearch(frameRef, frames[frameI], Rv, Ra, frameI);
+            size = fullSearch(frameRef, frames[frameI], Rv, Ra);
 
             // Escreve esses resultados em um arquivo binário
             char* fileName = new char[20];
-            // Gambiarra para definir nome do arquivo
             snprintf(fileName, 12, "%d.bin", frameI);
 
             FILE * result = fopen(fileName, "wb");
@@ -76,9 +73,7 @@ int main(int argc, char *argv[]) {
             fclose(result);
         }
 
-    // end = omp_get_wtime();
-
-    // printf("Fim da região paralela\n");
+    end = omp_get_wtime();
     
     // Fecha video
     fclose(fp);
@@ -119,12 +114,12 @@ int main(int argc, char *argv[]) {
         remove(fileName);
     }
     
-    for (int i = 0; i < 5; i++) {
-        printf("Ra: [%d] (%d, %d)\n", i, Ra[i][0], Ra[i][1]);
-        printf("Rv: [%d] (%d, %d)\n\n", i, Rv[i][0], Rv[i][1]);
-    }
+    // for (int i = 0; i < 5; i++) {
+    //     printf("Ra: [%d] (%d, %d)\n", i, Ra[i][0], Ra[i][1]);
+    //     printf("Rv: [%d] (%d, %d)\n\n", i, Rv[i][0], Rv[i][1]);
+    // }
 
-    // printf("Tempo de execução: %.2f segundos\n", end-begin);
+    printf("\nTempo de execução: %.2f segundos\n", end-begin);
 }
 
 
