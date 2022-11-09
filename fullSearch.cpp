@@ -135,8 +135,8 @@ int main(int argc, char *argv[]) {
 
     // fclose(resultFinal);
 
-    // int finalize_retcode = MPI_Finalize();
-    // printf("finalized with retcode %d\n", finalize_retcode); 
+    int finalize_retcode = MPI_Finalize();
+    printf("finalized with retcode %d\n", finalize_retcode); 
     printf("\nTempo de execução: %.2f segundos\n", end-begin);
 }
 
@@ -159,29 +159,32 @@ void readFrame(FILE *fp, unsigned char **frame, int width, int height) {
 }
 
 
-int fullSearch(unsigned char **frame1, unsigned char **frame2, unsigned int **Rv, unsigned int **Ra) {
+int fullSearch(unsigned char **frame1, unsigned char **frame2, int **Rv, int **Ra) {
     int i, j, k, l, m, n;
     int posI=0, posJ=0, posK=0, posL=0;
     int width = 640;
     int height = 360;
-
+ 
     int position = 0;
-
+ 
     int totalDifference = 0;
     int minTotalDifference = 16500;
-
+    //int *sub[width*height];
+ 
     int minK=0, minL=0;
-
+ 
+    //MPI_Scatter(Rv, width * height, MPI::INT, &sub, width*height, MPI::INT, 0, MPI_COMM_WORLD);
+ 
     // Percorre blocos do frame atual
     for (i = 0; i < height/8; i++) {
         for (j = 0; j < width/8; j++) {            
             posI = i*8;
             posJ = j*8;
-
+ 
             minTotalDifference = 16500;
             minK = 0;
             minL = 0;
-
+ 
             // Percorre blocos do frame 1 (referencia)
             #pragma omp for collapse(2) nowait schedule(guided)
             for (k = 0; k < height/8; k++) {
@@ -189,7 +192,7 @@ int fullSearch(unsigned char **frame1, unsigned char **frame2, unsigned int **Rv
                     totalDifference = 0;
                     posK = k*8;
                     posL = l*8;
-
+ 
                     // percorre pixels do bloco de referencia
                     for (m = 0; m < 8; m++) {
                         for (n = 0; n < 8; n++) {
@@ -199,7 +202,7 @@ int fullSearch(unsigned char **frame1, unsigned char **frame2, unsigned int **Rv
                             );
                         }
                     }
-
+ 
                     if (totalDifference < minTotalDifference) {
                         minTotalDifference = totalDifference;
                         minK = posK;
@@ -207,18 +210,23 @@ int fullSearch(unsigned char **frame1, unsigned char **frame2, unsigned int **Rv
                     }
                 }
             }
-
+ 
             // Guarda bloco com menor diferenca nos vetores
             position = (i * width / 8) + j;
-
-            Rv[position] = (unsigned int *)malloc(sizeof *Rv[position] * 2);
+ 
+            //sub[position] = (int *)malloc(sizeof *Rv[position] * 2);
+            //sub[position][0] = minK;
+            //sub[position][1] = minL;
+ 
+            Rv[position] = (int *)malloc(sizeof *Rv[position] * 2);
             Rv[position][0] = minK;
             Rv[position][1] = minL;
-
-            Ra[position] = (unsigned int *)malloc(sizeof *Ra[position] * 2);
+ 
+            Ra[position] = (int *)malloc(sizeof *Ra[position] * 2);
             Ra[position][0] = posI;
             Ra[position][1] = posJ;
         }
     }
+    //MPI_Gather(sub, width, MPI_INT, Rv, height, MPI_INT, 0, MPI_COMM_WORLD);
     return position;
  }
