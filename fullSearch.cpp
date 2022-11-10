@@ -16,7 +16,7 @@ int main(int argc, char *argv[]) {
 
     // Array de frames
     unsigned char ***frames;
-    int nFrames = 20;
+    int nFrames = 3;
     int frameI = 0;
 
     unsigned int **Rv;
@@ -42,19 +42,20 @@ int main(int argc, char *argv[]) {
     readFrame(fp, frameRef, width, height);
 
     // Lê quadros restante e guarda em array
-    frames = (unsigned char ***)malloc(sizeof ***frames * nFrames);
+    frames = (unsigned char ***)malloc(sizeof **frames * nFrames);
 
     for (frameI = 0; frameI < nFrames; frameI++) {
         frames[frameI] = (unsigned char **)malloc(sizeof *frames[frameI] * height);
         readFrame(fp, frames[frameI], width, height);
     }
 
-    begin = omp_get_wtime();
+    // begin = omp_get_wtime();
     
     // Para cada quadro, executa fullSearch
     #pragma omp parallel for shared(frames, fp, width, height, maxBlocks) private(size) lastprivate(Ra, Rv)
         for (frameI=0; frameI < nFrames ; frameI++){
-            printf("Processando frame %d\t[Thread %d]\n", frameI + 1, omp_get_thread_num());
+            // printf("Processando frame %d\t[Thread %d]\n", frameI + 1, omp_get_thread_num());
+            printf("Processando frame %d\n", frameI + 1);
 
             // Rv e Ra guardam resultados do fullSearch
             Rv = (unsigned int **)malloc(sizeof *Rv * maxBlocks);
@@ -84,18 +85,18 @@ int main(int argc, char *argv[]) {
             fclose(result1);
         }
 
-    end = omp_get_wtime();
+    // end = omp_get_wtime();
     
     // Fecha video
     fclose(fp);
 
     // Concatena resultados em um único arquivo
-    FILE * result = fopen("coded_video.bin", "wb");
+    FILE * finalResult = fopen("coded_video.bin", "wb");
 
     // Escreve primeiro quadro no arquivo
     for (int i = 0; i < height; i++) {
         for (int j = 0; j < width; j++) {
-            fwrite(&frameRef[i][j], sizeof(frameRef[i][j]), 1, result);
+            fwrite(&frameRef[i][j], sizeof(frameRef[i][j]), 1, finalResult);
         }
     }
 
@@ -116,8 +117,8 @@ int main(int argc, char *argv[]) {
             fread(&RaI, sizeof(RaI), 1, partialResult);
             fread(&RvI, sizeof(RvI), 1, partialResult);
 
-            fwrite(&RaI, sizeof(RaI), 1, result);
-            fwrite(&RvI, sizeof(RvI), 1, result);
+            fwrite(&RaI, sizeof(RaI), 1, finalResult);
+            fwrite(&RvI, sizeof(RvI), 1, finalResult);
         }
 
         fclose(partialResult);
@@ -125,12 +126,14 @@ int main(int argc, char *argv[]) {
         remove(fileName);
     }
     
-    // for (int i = 0; i < 5; i++) {
-    //     printf("Ra: [%d] (%d, %d)\n", i, Ra[i][0], Ra[i][1]);
-    //     printf("Rv: [%d] (%d, %d)\n\n", i, Rv[i][0], Rv[i][1]);
-    // }
+    free(Ra);
+    free(Rv);
+    free(frameRef);
+    free(frames);
 
-    printf("\nTempo de execução: %.2f segundos\n", end-begin);
+    fclose(finalResult);
+
+    // printf("\nTempo de execução: %.2f segundos\n", end-begin);
 }
 
 
