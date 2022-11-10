@@ -3,6 +3,7 @@
 #include <fstream>
 #include <sys/stat.h>
 #include <omp.h>
+#include <mpi.h>
 
 using namespace std;
 
@@ -10,130 +11,144 @@ void readFrame(FILE *fp, unsigned char **frame, int width, int height);
 int fullSearch(unsigned char **frame1, unsigned char **frame2, unsigned int **Rv, unsigned int **Ra);
 
 int main(int argc, char *argv[]) {
+    MPI_Init(&argc, &argv);
+
+    int world_size;
+    MPI_Comm_size(MPI_COMM_WORLD, &world_size);
+    int world_rank;
+    MPI_Comm_rank(MPI_COMM_WORLD, &world_rank);
+
     int width = 640;
     int height = 360;
     unsigned char **frameRef;
 
     // Array de frames
     unsigned char ***frames;
-    int nFrames = 3;
+    int nFrames = 20;
     int frameI = 0;
 
     unsigned int **Rv;
     unsigned int **Ra;
     int maxBlocks = width * height / 64;
     int size = 0;
-    double begin = 0, end = 0;
+    // double begin = 0, end = 0;
 
     omp_set_num_threads(8);
 
-    frameRef = (unsigned char **)malloc(sizeof *frameRef * height);
+    if (world_rank == 0) {
 
-    FILE *fp = fopen("video_converted_640x360.yuv", "rb");
+        frameRef = (unsigned char **)malloc(sizeof *frameRef * height);
 
-    int status = mkdir("Ra_Rv",0777);
+        FILE *fp = fopen("video_converted_640x360.yuv", "rb");
 
-    if (fp == NULL)
-    {
-        printf("Cannot open file");
-    }
+        mkdir("Ra_Rv",0777);
 
-    // Lê frame 1 como referencia
-    readFrame(fp, frameRef, width, height);
+        if (fp == NULL)
+        {
+            printf("Cannot open file");
+        }
 
-    // Lê quadros restante e guarda em array
-    frames = (unsigned char ***)malloc(sizeof **frames * nFrames);
+        // Lê frame 1 como referencia
+        readFrame(fp, frameRef, width, height);
 
-    for (frameI = 0; frameI < nFrames; frameI++) {
-        frames[frameI] = (unsigned char **)malloc(sizeof *frames[frameI] * height);
-        readFrame(fp, frames[frameI], width, height);
-    }
+        // Lê quadros restante e guarda em array
+        frames = (unsigned char ***)malloc(sizeof **frames * nFrames);
 
-    // begin = omp_get_wtime();
-    
-    // Para cada quadro, executa fullSearch
-    #pragma omp parallel for shared(frames, fp, width, height, maxBlocks) private(size) lastprivate(Ra, Rv)
-        for (frameI=0; frameI < nFrames ; frameI++){
-            // printf("Processando frame %d\t[Thread %d]\n", frameI + 1, omp_get_thread_num());
-            printf("Processando frame %d\n", frameI + 1);
+        for (frameI = 0; frameI < nFrames; frameI++) {
+            frames[frameI] = (unsigned char **)malloc(sizeof *frames[frameI] * height);
+            readFrame(fp, frames[frameI], width, height);
+        }
 
-            // Rv e Ra guardam resultados do fullSearch
-            Rv = (unsigned int **)malloc(sizeof *Rv * maxBlocks);
-            Ra = (unsigned int **)malloc(sizeof *Ra * maxBlocks);
-            size = fullSearch(frameRef, frames[frameI], Rv, Ra);
+        // begin = omp_get_wtime();
+        
+        // Para cada quadro, executa fullSearch
+        #pragma omp parallel for shared(frames, fp, width, height, maxBlocks) private(size) lastprivate(Ra, Rv)
+            for (frameI=0; frameI < nFrames ; frameI++){
+                printf("Processando frame %d\t[Thread %d]\t[Rank %d]\n", 
+                    frameI, omp_get_thread_num(), world_rank);
+                // printf("Processando frame %d\n", frameI + 1);
 
-            // Escreve esses resultados em um arquivo binário
-            char* fileName = new char[20];
-            char* fileName1 = new char[20];
+                // Rv e Ra guardam resultados do fullSearch
+                Rv = (unsigned int **)malloc(sizeof *Rv * maxBlocks);
+                Ra = (unsigned int **)malloc(sizeof *Ra * maxBlocks);
+                size = fullSearch(frameRef, frames[frameI], Rv, Ra);
 
-            snprintf(fileName, 12, "%d.bin", frameI);
-            snprintf(fileName1, 18, "Ra_Rv/%d.txt", frameI + 1);
+                // Escreve esses resultados em um arquivo binário
+                char* fileName = new char[20];
+                char* fileName1 = new char[20];
 
-            FILE * result = fopen(fileName, "wb");
-            FILE * result1 = fopen(fileName1, "w");
+                snprintf(fileName, 12, "%d.bin", frameI);
+                snprintf(fileName1, 18, "Ra_Rv/%d.txt", frameI + 1);
 
-            for (int i = 0; i < size; i++) {
-                for (int j = 0; j < 2; j++) {
-                    fwrite(&Ra[i][j], sizeof(Ra[i][j]), 1, result);
-                    fwrite(&Rv[i][j], sizeof(Rv[i][j]), 1, result);
+                FILE * result = fopen(fileName, "wb");
+                FILE * result1 = fopen(fileName1, "w");
+
+                for (int i = 0; i < size; i++) {
+                    for (int j = 0; j < 2; j++) {
+                        fwrite(&Ra[i][j], sizeof(Ra[i][j]), 1, result);
+                        fwrite(&Rv[i][j], sizeof(Rv[i][j]), 1, result);
+                    }
+                    fprintf(result1, "Ra: (%d, %d)\n", Ra[i][0], Ra[i][1]);
+                    fprintf(result1, "Rv: (%d, %d)\n\n", Rv[i][0], Rv[i][1]);
                 }
-                fprintf(result1, "Ra: (%d, %d)\n", Ra[i][0], Ra[i][1]);
-                fprintf(result1, "Rv: (%d, %d)\n\n", Rv[i][0], Rv[i][1]);
+
+                fclose(result);
+                fclose(result1);
             }
 
-            fclose(result);
-            fclose(result1);
-        }
-
-    // end = omp_get_wtime();
-    
-    // Fecha video
-    fclose(fp);
-
-    // Concatena resultados em um único arquivo
-    FILE * finalResult = fopen("coded_video.bin", "wb");
-
-    // Escreve primeiro quadro no arquivo
-    for (int i = 0; i < height; i++) {
-        for (int j = 0; j < width; j++) {
-            fwrite(&frameRef[i][j], sizeof(frameRef[i][j]), 1, finalResult);
-        }
-    }
-
-    // Escreve resultados do fullSearch para outros quadros
-    for (frameI = 0; frameI < nFrames; frameI++) {
-        char* fileName = new char[20];
-
-        snprintf(fileName, 12, "%d.bin", frameI);
-
-        FILE * partialResult = fopen(fileName, "rb");
+        // end = omp_get_wtime();
         
-        // Tem um valor X e Y para cada bloco
-        size = (maxBlocks - 1) * 2;
+        // Fecha video
+        fclose(fp);
 
-        for (int i = 0; i < size; i++) {
-            unsigned int RaI, RvI;
+        // Concatena resultados em um único arquivo
+        FILE * finalResult = fopen("coded_video.bin", "wb");
 
-            fread(&RaI, sizeof(RaI), 1, partialResult);
-            fread(&RvI, sizeof(RvI), 1, partialResult);
-
-            fwrite(&RaI, sizeof(RaI), 1, finalResult);
-            fwrite(&RvI, sizeof(RvI), 1, finalResult);
+        // Escreve primeiro quadro no arquivo
+        for (int i = 0; i < height; i++) {
+            for (int j = 0; j < width; j++) {
+                fwrite(&frameRef[i][j], sizeof(frameRef[i][j]), 1, finalResult);
+            }
         }
 
-        fclose(partialResult);
+        // Escreve resultados do fullSearch para outros quadros
+        for (frameI = 0; frameI < nFrames; frameI++) {
+            char* fileName = new char[20];
 
-        remove(fileName);
+            snprintf(fileName, 12, "%d.bin", frameI);
+
+            FILE * partialResult = fopen(fileName, "rb");
+            
+            // Tem um valor X e Y para cada bloco
+            size = (maxBlocks - 1) * 2;
+
+            for (int i = 0; i < size; i++) {
+                unsigned int RaI, RvI;
+
+                fread(&RaI, sizeof(RaI), 1, partialResult);
+                fread(&RvI, sizeof(RvI), 1, partialResult);
+
+                fwrite(&RaI, sizeof(RaI), 1, finalResult);
+                fwrite(&RvI, sizeof(RvI), 1, finalResult);
+            }
+
+            fclose(partialResult);
+
+            remove(fileName);
+        }
+        
+        free(Ra);
+        free(Rv);
+        free(frameRef);
+        free(frames);
+
+        fclose(finalResult);
+    } else {
+        printf("Rank %d\n", world_rank);
     }
-    
-    free(Ra);
-    free(Rv);
-    free(frameRef);
-    free(frames);
-
-    fclose(finalResult);
 
     // printf("\nTempo de execução: %.2f segundos\n", end-begin);
+    MPI_Finalize();
 }
 
 
