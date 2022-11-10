@@ -7,7 +7,7 @@
 
 using namespace std;
 
-void readFrame(FILE *fp, unsigned char **frame, int width, int height);
+void readFrame(MPI_File fp, unsigned char **frame, int width, int height);
 int fullSearch(unsigned char **frame1, unsigned char **frame2, unsigned int **Rv, unsigned int **Ra);
 
 int main(int argc, char *argv[]) {
@@ -39,13 +39,15 @@ int main(int argc, char *argv[]) {
 
         frameRef = (unsigned char **)malloc(sizeof *frameRef * height);
 
-        FILE *fp = fopen("video_converted_640x360.yuv", "rb");
+        //MPI_File *fp = fopen("video_converted_640x360.yuv", "rb");
+        MPI_File fp;
+        MPI_File_open(MPI_COMM_WORLD, "video_converted_640x360.yuv", MPI_MODE_RDONLY, MPI_INFO_NULL, &fp);
 
-        mkdir("Ra_Rv",0777);
+        //mkdir("Ra_Rv",0777);
 
         if (fp == NULL)
         {
-            printf("Cannot open file");
+            printf("Cannot open MPI_File");
         }
 
         // Lê frame 1 como referencia
@@ -66,7 +68,7 @@ int main(int argc, char *argv[]) {
             for (frameI=0; frameI < nFrames ; frameI++){
                 printf("Processando frame %d\t[Thread %d]\t[Rank %d]\n", 
                     frameI, omp_get_thread_num(), world_rank);
-                // printf("Processando frame %d\n", frameI + 1);
+                printf("Processando frame %d\n", frameI + 1);
 
                 // Rv e Ra guardam resultados do fullSearch
                 Rv = (unsigned int **)malloc(sizeof *Rv * maxBlocks);
@@ -74,14 +76,14 @@ int main(int argc, char *argv[]) {
                 size = fullSearch(frameRef, frames[frameI], Rv, Ra);
 
                 // Escreve esses resultados em um arquivo binário
-                char* fileName = new char[20];
-                char* fileName1 = new char[20];
+                char* file = new char[20];
+                char* file1 = new char[20];
 
-                snprintf(fileName, 12, "%d.bin", frameI);
-                snprintf(fileName1, 18, "Ra_Rv/%d.txt", frameI + 1);
+                snprintf(file, 12, "%d.bin", frameI);
+                snprintf(file1, 18, "Ra_Rv/%d.txt", frameI + 1);
 
-                FILE * result = fopen(fileName, "wb");
-                FILE * result1 = fopen(fileName1, "w");
+                FILE *result = fopen(file, "wb");
+                FILE *result1 = fopen(file1, "w");
 
                 for (int i = 0; i < size; i++) {
                     for (int j = 0; j < 2; j++) {
@@ -99,7 +101,7 @@ int main(int argc, char *argv[]) {
         // end = omp_get_wtime();
         
         // Fecha video
-        fclose(fp);
+        MPI_File_close(&fp);
 
         // Concatena resultados em um único arquivo
         FILE * finalResult = fopen("coded_video.bin", "wb");
@@ -113,11 +115,11 @@ int main(int argc, char *argv[]) {
 
         // Escreve resultados do fullSearch para outros quadros
         for (frameI = 0; frameI < nFrames; frameI++) {
-            char* fileName = new char[20];
+            char* file = new char[20];
 
-            snprintf(fileName, 12, "%d.bin", frameI);
+            snprintf(file, 12, "%d.bin", frameI);
 
-            FILE * partialResult = fopen(fileName, "rb");
+            FILE * partialResult = fopen(file, "rb");
             
             // Tem um valor X e Y para cada bloco
             size = (maxBlocks - 1) * 2;
@@ -134,7 +136,7 @@ int main(int argc, char *argv[]) {
 
             fclose(partialResult);
 
-            remove(fileName);
+            remove(file);
         }
         
         free(Ra);
@@ -152,7 +154,7 @@ int main(int argc, char *argv[]) {
 }
 
 
-void readFrame(FILE *fp, unsigned char **frame, int width, int height) {
+void readFrame(MPI_File fp, unsigned char **frame, int width, int height) {
     int i;
     unsigned char *temp;
 
@@ -162,11 +164,13 @@ void readFrame(FILE *fp, unsigned char **frame, int width, int height) {
     for (i = 0; i < height; i++)
     {
         frame[i] = (unsigned char *)malloc(sizeof *frame[i] * width);
-        fread(frame[i], sizeof(unsigned char), width, fp);
+        //fread(frame[i], sizeof(unsigned char), width, fp);
+        MPI_File_read(fp, frame[i], sizeof(frame[i]), MPI::UNSIGNED_CHAR, MPI_STATUS_IGNORE);
     }
 
     // Pula canais CbCR
-    fread(temp, sizeof(unsigned char), width * height / 2, fp);
+    //fread(temp, sizeof(unsigned char), width * height / 2, fp);
+    MPI_File_read(fp, temp, sizeof(temp), MPI::UNSIGNED_CHAR, MPI_STATUS_IGNORE);
 }
 
 
