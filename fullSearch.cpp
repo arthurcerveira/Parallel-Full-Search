@@ -7,7 +7,7 @@
 
 using namespace std;
 
-void readFrame(MPI_File fp, unsigned char **frame, int width, int height);
+void readFrame(MPI_File fp, int frameI, unsigned char **frame, int width, int height);
 int fullSearch(unsigned char **frame1, unsigned char **frame2, unsigned int **Rv, unsigned int **Ra);
 
 int main(int argc, char *argv[]) {
@@ -51,14 +51,14 @@ int main(int argc, char *argv[]) {
         }
 
         // Lê frame 1 como referencia
-        readFrame(fp, frameRef, width, height);
+        readFrame(fp, 0, frameRef, width, height);
 
         // Lê quadros restante e guarda em array
         frames = (unsigned char ***)malloc(sizeof **frames * nFrames);
 
         for (frameI = 0; frameI < nFrames; frameI++) {
             frames[frameI] = (unsigned char **)malloc(sizeof *frames[frameI] * height);
-            readFrame(fp, frames[frameI], width, height);
+            readFrame(fp, frameI+1, frames[frameI], width, height);
         }
 
         // begin = omp_get_wtime();
@@ -68,7 +68,7 @@ int main(int argc, char *argv[]) {
             for (frameI=0; frameI < nFrames ; frameI++){
                 printf("Processando frame %d\t[Thread %d]\t[Rank %d]\n", 
                     frameI, omp_get_thread_num(), world_rank);
-                printf("Processando frame %d\n", frameI + 1);
+                // printf("Processando frame %d\n", frameI + 1);
 
                 // Rv e Ra guardam resultados do fullSearch
                 Rv = (unsigned int **)malloc(sizeof *Rv * maxBlocks);
@@ -154,23 +154,25 @@ int main(int argc, char *argv[]) {
 }
 
 
-void readFrame(MPI_File fp, unsigned char **frame, int width, int height) {
+void readFrame(MPI_File fp, int frameI, unsigned char **frame, int width, int height) {
     int i;
     unsigned char *temp;
 
+    int offset = frameI * width * height * 3 / 2;
+
     temp = (unsigned char *)malloc(sizeof *temp * width * height);
 
-    // Lê frame Y
-    for (i = 0; i < height; i++)
-    {
-        frame[i] = (unsigned char *)malloc(sizeof *frame[i] * width);
-        //fread(frame[i], sizeof(unsigned char), width, fp);
-        MPI_File_read(fp, frame[i], sizeof(frame[i]), MPI::UNSIGNED_CHAR, MPI_STATUS_IGNORE);
-    }
+    // Lê Y de acordo com o offset
+    MPI_File_read_at(fp, offset, temp, width * height, 
+                     MPI::UNSIGNED_CHAR, MPI_STATUS_IGNORE);
 
-    // Pula canais CbCR
-    //fread(temp, sizeof(unsigned char), width * height / 2, fp);
-    MPI_File_read(fp, temp, sizeof(temp), MPI::UNSIGNED_CHAR, MPI_STATUS_IGNORE);
+    // Formata bytes em matriz
+    for (i = 0; i < height; i++) {
+        frame[i] = (unsigned char *)malloc(sizeof *frame[i] * width);
+
+        for (int j = 0; j < width; j++)
+            frame[i][j] = temp[i*width + j];
+    }
 }
 
 
@@ -187,6 +189,7 @@ int fullSearch(unsigned char **frame1, unsigned char **frame2, unsigned int **Rv
 
     int minK=0, minL=0;
 
+    //MPI_Scatter();//
     // Percorre blocos do frame atual
     for (i = 0; i < height/8; i++) {
         for (j = 0; j < width/8; j++) {            
@@ -235,5 +238,6 @@ int fullSearch(unsigned char **frame1, unsigned char **frame2, unsigned int **Rv
             Ra[position][1] = posJ;
         }
     }
+    //MPI_Gather();
     return position;
  }
