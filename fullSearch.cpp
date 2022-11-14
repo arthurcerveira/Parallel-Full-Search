@@ -189,7 +189,10 @@ int fullSearch(unsigned char **frame1, unsigned char **frame2, unsigned int **Rv
 
     int minK=0, minL=0;
 
-    //MPI_Scatter();//
+    int world_size;
+    MPI_Comm_size(MPI_COMM_WORLD, &world_size);
+
+    //MPI_Scatter(Ra, world_size, MPI_Datatype sendtype, void *recvbuf, int recvcount, MPI_Datatype recvtype, int root,MPI_Comm comm)
     // Percorre blocos do frame atual
     for (i = 0; i < height/8; i++) {
         for (j = 0; j < width/8; j++) {            
