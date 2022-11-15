@@ -68,8 +68,8 @@ int main(int argc, char *argv[]) {
     begin = omp_get_wtime();
     
     // Para cada quadro, executa fullSearch
-    #pragma omp parallel for shared(frames, fp, width, height, maxBlocks) private(size) lastprivate(Ra, Rv)
-        for (frameI=0; frameI < nFrames ; frameI++){
+    //#pragma omp parallel for shared(frames, fp, width, height, maxBlocks) private(size) lastprivate(Ra, Rv)
+        for (frameI=0; frameI < 2 ; frameI++){
             printf("Processando frame %d\t[Thread %d]\t[Rank %d]\n", 
                 frameI, omp_get_thread_num(), world_rank);
             // printf("Processando frame %d\n", frameI + 1);
@@ -78,6 +78,10 @@ int main(int argc, char *argv[]) {
             Rv = (positionArray *)malloc(sizeof(positionArray) * maxBlocks);
             Ra = (positionArray *)malloc(sizeof(positionArray) * maxBlocks);
             size = fullSearch(frameRef, frames[frameI], Rv, Ra);
+            for(int i = 0; i < 3600; i++) {
+                printf("[%d] Rv(%d, %d) -> Ra(%d,%d)\n", i, Rv[i].x, Rv[i].y, Ra[i].x, Ra[i].y);
+            }
+            
 
         //     // Escreve esses resultados em um arquivo binário
         //     char* file = new char[20];
@@ -151,6 +155,7 @@ int main(int argc, char *argv[]) {
 
     // fclose(finalResult);
 
+    free(Ra);
     MPI_Finalize();
 }
 
@@ -204,36 +209,49 @@ int fullSearch(unsigned char **frame1, unsigned char **frame2, positionArray *Rv
 
     int world_size;
     MPI_Comm_size(MPI_COMM_WORLD, &world_size);
+    MPI_Datatype positionsStruct;
+    defineStruct(&positionsStruct);
+    int world_rank;
+    MPI_Comm_rank(MPI_COMM_WORLD, &world_rank);
+    positionArray recvbuf[(3600/world_size)];
+    positionArray temp[(3600/world_size)];
 
-    //MPI_Scatter(Ra, world_size, MPI_Datatype sendtype, void *recvbuf, int recvcount, MPI_Datatype recvtype, int root,MPI_Comm comm)
+    printf("Pré-Scatter\n");
+    MPI_Scatter(&Ra[0], 3600/world_size, positionsStruct, &recvbuf[0], 3600/world_size, positionsStruct, world_rank, MPI_COMM_WORLD);
+    printf("Pós-Scatter\n");
     // Percorre blocos do frame atual
     for (i = 0; i < height/8; i++) {
-        for (j = 0; j < width/8; j++) {            
+        //printf("1. Primeiro For\n");  
+        for (j = 0; j < (width/world_size)/8; j++) {
+            //printf("2. Segundo For\n");            
             posI = i*8;
             posJ = j*8;
+            //printf("2. Segundo For\n%d, %d\n", posI, posJ);
 
             minTotalDifference = 16500;
             minK = 0;
             minL = 0;
 
             // Percorre blocos do frame 1 (referencia)
-            #pragma omp for collapse(2) nowait schedule(guided)
+            //#pragma omp parallel for collapse(2) schedule(guided) shared(minK, minL, posI, posJ) lastprivate(frame2, frame1, totalDifference, minTotalDifference)
             for (k = 0; k < height/8; k++) {
-                for (l = 0; l < width/8; l++) {
+                for (l = 0; l < width/8; l++) { 
                     totalDifference = 0;
                     posK = k*8;
                     posL = l*8;
+                    //printf("3. For paralelo\n%d, %d\n", posK, posL); 
 
                     // percorre pixels do bloco de referencia
                     for (m = 0; m < 8; m++) {
+                        //printf("4. Primeiro For Bloco\n%d\n", m);  
                         for (n = 0; n < 8; n++) {
+                            //printf("5. Segundo For Bloco\n%d\n", n);  
                             // compara pixels do frame atual com referencia
                             totalDifference += abs(
                                 frame2[posI+m][posJ+n] - frame1[posK+m][posL+n]
                             );
                         }
                     }
-
                     if (totalDifference < minTotalDifference) {
                         minTotalDifference = totalDifference;
                         minK = posK;
@@ -241,19 +259,25 @@ int fullSearch(unsigned char **frame1, unsigned char **frame2, positionArray *Rv
                     }
                 }
             }
+            //printf("Saída do for paralelo do omp\n");
 
             // Guarda bloco com menor diferenca nos vetores
-            position = (i * width / 8) + j;
+            position = j;
 
             // Rv[position] = (unsigned int *)malloc(sizeof *Rv[position] * 2);
             Rv[position].x = minK;
             Rv[position].y = minL;
 
             // Ra[position] = (unsigned int *)malloc(sizeof *Ra[position] * 2);
-            Ra[position].x = posI;
-            Ra[position].y = posJ;
+            temp[position].x = posI;
+            temp[position].y = posJ;
         }
     }
     //MPI_Gather();
+    printf("Pré-Gather\n");
+    //MPI_Request request;
+    MPI_Gather(&temp[0], 3600/world_size, positionsStruct, &Ra[0], 3600/world_size, positionsStruct, world_rank, MPI_COMM_WORLD);
+    printf("Pós-Gather\n");
+
     return position;
  }
