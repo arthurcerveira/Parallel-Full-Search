@@ -30,7 +30,7 @@ int main(int argc, char *argv[]) {
 
     // Array de frames
     unsigned char ***frames;
-    int nFrames = 5;
+    int totalFrames = 13;
     int frameI = 0;
 
     positionArray *Rv;
@@ -41,7 +41,6 @@ int main(int argc, char *argv[]) {
 
     omp_set_num_threads(4);
 
-    // if (world_rank == 0) {
     frameRef = (unsigned char **)malloc(sizeof *frameRef * height);
 
     MPI_File fp;
@@ -57,56 +56,82 @@ int main(int argc, char *argv[]) {
     // Lê frame 1 como referencia
     readFrame(fp, 0, frameRef, width, height);
 
+    nFrames = (totalFrames - 1) / world_size;
+
     // Lê quadros restante e guarda em array
     frames = (unsigned char ***)malloc(sizeof **frames * nFrames);
 
-    for (frameI = 0; frameI < nFrames; frameI++) {
-        frames[frameI] = (unsigned char **)malloc(sizeof *frames[frameI] * height);
-        readFrame(fp, frameI+1, frames[frameI], width, height);
+    int startFrame = (world_rank * nFrames) + 1;
+    int endFrame = (world_rank * nFrames + nFrames) + 1;
+
+    for (frameI = startFrame; frameI < endFrame; frameI++)
+    {
+        printf("[%d] frameI = %d\n", world_rank, frameI);
+        frames[frameI - startFrame] = (unsigned char **)malloc(sizeof **frames * height);
+        readFrame(fp, frameI, frames[frameI - startFrame], width, height);
+
+        // Salva quadro como imagem
+        // char* fileName = new char[20];
+
+        // snprintf(fileName, 12, "%d-%d.ppm", frameI, world_rank);
+
+        // FILE *f4 = fopen(fileName, "wb");
+
+        // fprintf(f4, "P6\n%i %i 255\n", width, height);
+
+        // for (int x=0; x<height; x++) {
+        //     for (int y=0; y<width; y++) {
+        //         fputc(frames[frameI - startFrame][x][y], f4);
+        //         fputc(frames[frameI - startFrame][x][y], f4);
+        //         fputc(frames[frameI - startFrame][x][y], f4); 
+        //     }
+        // }
+
+        // fclose(f4);
     }
 
-    begin = omp_get_wtime();
-    
-    // Para cada quadro, executa fullSearch
-    #pragma omp parallel for shared(frames, fp, width, height, maxBlocks) private(size) lastprivate(Ra, Rv)
-        for (frameI=0; frameI < nFrames ; frameI++){
-            printf("Processando frame %d\t[Thread %d]\t[Rank %d]\n", 
-                frameI, omp_get_thread_num(), world_rank);
-            // printf("Processando frame %d\n", frameI + 1);
-
-            // Rv e Ra guardam resultados do fullSearch
-            Rv = (positionArray *)malloc(sizeof(positionArray) * maxBlocks);
-            Ra = (positionArray *)malloc(sizeof(positionArray) * maxBlocks);
-            size = fullSearch(frameRef, frames[frameI], Rv, Ra);
-
-        //     // Escreve esses resultados em um arquivo binário
-        //     char* file = new char[20];
-        //     char* file1 = new char[20];
-
-        //     snprintf(file, 12, "%d.bin", frameI);
-        //     snprintf(file1, 18, "Ra_Rv/%d.txt", frameI + 1);
-
-        //     FILE *result = fopen(file, "wb");
-        //     FILE *result1 = fopen(file1, "w");
-
-        //     for (int i = 0; i < size; i++) {
-        //         fwrite(&Ra[i].x, sizeof(Ra[i].x), 1, result);
-        //         fwrite(&Ra[i].y, sizeof(Ra[i].y), 1, result);
-        //         fwrite(&Rv[i].x, sizeof(Rv[i].x), 1, result);
-        //         fwrite(&Rv[i].y, sizeof(Rv[i].y), 1, result);
-
-        //         fprintf(result1, "Ra: (%d, %d)\n", Ra[i].x, Ra[i].y);
-        //         fprintf(result1, "Rv: (%d, %d)\n\n", Rv[i].x, Rv[i].y);
-        //     }
-
-        //     fclose(result);
-        //     fclose(result1);
-        }
-
-    end = omp_get_wtime();
-    
     // Fecha video
     MPI_File_close(&fp);
+
+    // begin = omp_get_wtime();
+    
+    // // Para cada quadro, executa fullSearch
+    // #pragma omp parallel for shared(frames, fp, width, height, maxBlocks) private(size) lastprivate(Ra, Rv)
+    //     for (frameI=0; frameI < nFrames ; frameI++){
+    //         printf("Processando frame %d\t[Thread %d]\t[Rank %d]\n", 
+    //             frameI, omp_get_thread_num(), world_rank);
+    //         // printf("Processando frame %d\n", frameI + 1);
+
+    //         // Rv e Ra guardam resultados do fullSearch
+    //         Rv = (positionArray *)malloc(sizeof(positionArray) * maxBlocks);
+    //         Ra = (positionArray *)malloc(sizeof(positionArray) * maxBlocks);
+    //         size = fullSearch(frameRef, frames[frameI], Rv, Ra);
+
+    //     //     // Escreve esses resultados em um arquivo binário
+    //     //     char* file = new char[20];
+    //     //     char* file1 = new char[20];
+
+    //     //     snprintf(file, 12, "%d.bin", frameI);
+    //     //     snprintf(file1, 18, "Ra_Rv/%d.txt", frameI + 1);
+
+    //     //     FILE *result = fopen(file, "wb");
+    //     //     FILE *result1 = fopen(file1, "w");
+
+    //     //     for (int i = 0; i < size; i++) {
+    //     //         fwrite(&Ra[i].x, sizeof(Ra[i].x), 1, result);
+    //     //         fwrite(&Ra[i].y, sizeof(Ra[i].y), 1, result);
+    //     //         fwrite(&Rv[i].x, sizeof(Rv[i].x), 1, result);
+    //     //         fwrite(&Rv[i].y, sizeof(Rv[i].y), 1, result);
+
+    //     //         fprintf(result1, "Ra: (%d, %d)\n", Ra[i].x, Ra[i].y);
+    //     //         fprintf(result1, "Rv: (%d, %d)\n\n", Rv[i].x, Rv[i].y);
+    //     //     }
+
+    //     //     fclose(result);
+    //     //     fclose(result1);
+    //     }
+
+    // end = omp_get_wtime();
 
     // Concatena resultados em um único arquivo
     // FILE * finalResult = fopen("coded_video.bin", "wb");
@@ -202,10 +227,6 @@ int fullSearch(unsigned char **frame1, unsigned char **frame2, positionArray *Rv
 
     int minK=0, minL=0;
 
-    int world_size;
-    MPI_Comm_size(MPI_COMM_WORLD, &world_size);
-
-    //MPI_Scatter(Ra, world_size, MPI_Datatype sendtype, void *recvbuf, int recvcount, MPI_Datatype recvtype, int root,MPI_Comm comm)
     // Percorre blocos do frame atual
     for (i = 0; i < height/8; i++) {
         for (j = 0; j < width/8; j++) {            
@@ -254,6 +275,6 @@ int fullSearch(unsigned char **frame1, unsigned char **frame2, positionArray *Rv
             Ra[position].y = posJ;
         }
     }
-    //MPI_Gather();
+
     return position;
  }
