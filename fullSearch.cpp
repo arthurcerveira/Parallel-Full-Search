@@ -31,7 +31,7 @@ int main(int argc, char *argv[]) {
 
     // Array de frames
     unsigned char ***frames;
-    int totalFrames = 10;
+    int totalFrames = 13;
     int frameI = 0;
     int nFrames;
     int framePos;
@@ -54,7 +54,7 @@ int main(int argc, char *argv[]) {
 
     omp_set_num_threads(4);
 
-    frameRef = (unsigned char **)malloc(sizeof *frameRef * height);
+    frameRef = (unsigned char **)malloc(sizeof(*frameRef) * height);
 
     MPI_File fp;
     MPI_File_open(MPI_COMM_WORLD, "video_converted_640x360.yuv", MPI_MODE_RDONLY, MPI_INFO_NULL, &fp);
@@ -70,7 +70,7 @@ int main(int argc, char *argv[]) {
     nFrames = (totalFrames - 1) / world_size;
 
     // Lê quadros restante e guarda em array
-    frames = (unsigned char ***)malloc(sizeof **frames * nFrames);
+    frames = (unsigned char ***)malloc(sizeof(**frames) * nFrames);
 
     int startFrame = (world_rank * nFrames) + 1;
     int endFrame = (world_rank * nFrames + nFrames) + 1;
@@ -79,7 +79,7 @@ int main(int argc, char *argv[]) {
     {
         framePos = frameI - startFrame;
         // printf("[Rank %d] frames[%d] = Frame %d\n", world_rank, framePos, frameI);
-        frames[framePos] = (unsigned char **)malloc(sizeof **frames * height);
+        frames[framePos] = (unsigned char **)malloc(sizeof(**frames) * height);
         readFrame(fp, frameI, frames[framePos], width, height);
     }
 
@@ -87,18 +87,18 @@ int main(int argc, char *argv[]) {
     MPI_File_close(&fp);
 
     // Aloca memoria para Rv e Ra
-    RvArray = (positionArray **)malloc(sizeof *RvArray * nFrames);
-    RaArray = (positionArray **)malloc(sizeof *RaArray * nFrames);
+    RvArray = (positionArray **)malloc(sizeof(*RvArray) * nFrames);
+    RaArray = (positionArray **)malloc(sizeof(*RaArray) * nFrames);
 
     begin = omp_get_wtime();
     
     // Para cada quadro, executa fullSearch
-    #pragma omp parallel for shared(frames, fp, width, height, maxBlocks, RvArray, RaArray) private(size)
+    #pragma omp parallel for shared(frames, fp, width, height, maxBlocks, RvArray, RaArray) private(size, framePos)
         for (frameI = startFrame; frameI < endFrame; frameI++) {
             framePos = frameI - startFrame;
 
             printf("Processando frame %d\t[Rank %d]\t[Thread %d]\n", 
-                frameI + 1, world_rank, omp_get_thread_num());
+                   frameI + 1, world_rank, omp_get_thread_num());
 
             // Rv e Ra guardam resultados do fullSearch
             RvArray[framePos] = (positionArray *)malloc(sizeof(positionArray) * maxBlocks);
@@ -121,8 +121,8 @@ int main(int argc, char *argv[]) {
         positionArray **RvArrayFinal;
         positionArray **RaArrayFinal;
 
-        RvArrayFinal = (positionArray **)malloc(sizeof *RvArrayFinal * totalFrames);
-        RaArrayFinal = (positionArray **)malloc(sizeof *RaArrayFinal * totalFrames);
+        RvArrayFinal = (positionArray **)malloc(sizeof(*RvArrayFinal) * totalFrames);
+        RaArrayFinal = (positionArray **)malloc(sizeof(*RaArrayFinal) * totalFrames);
 
         // Copia resultados do rank 0
         for (frameI = 0; frameI < nFrames; frameI++) {
@@ -137,16 +137,16 @@ int main(int argc, char *argv[]) {
                 RvArrayFinal[rank * nFrames + frameI] = (positionArray *)malloc(sizeof(positionArray) * maxBlocks);
                 RaArrayFinal[rank * nFrames + frameI] = (positionArray *)malloc(sizeof(positionArray) * maxBlocks);
 
-                MPI_Recv(RvArrayFinal[rank * nFrames + frameI], maxBlocks, tstype, rank, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
-                MPI_Recv(RaArrayFinal[rank * nFrames + frameI], maxBlocks, tstype, rank, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+                MPI_Recv(RvArrayFinal[rank * nFrames + frameI], maxBlocks, tstype, rank, frameI, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+                MPI_Recv(RaArrayFinal[rank * nFrames + frameI], maxBlocks, tstype, rank, frameI, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
             }        
         }
     } else {
         // Envia resultados para rank 0
         for (frameI = 0; frameI < nFrames; frameI++) {
             // printf("Enviando resultados para rank 0\t[Rank %d]\n", world_rank);
-            MPI_Send(RvArray[frameI], maxBlocks, tstype, 0, 0, MPI_COMM_WORLD);
-            MPI_Send(RaArray[frameI], maxBlocks, tstype, 0, 0, MPI_COMM_WORLD);
+            MPI_Send(RvArray[frameI], maxBlocks, tstype, 0, frameI, MPI_COMM_WORLD);
+            MPI_Send(RaArray[frameI], maxBlocks, tstype, 0, frameI, MPI_COMM_WORLD);
         }
     }
 
