@@ -5,6 +5,7 @@
 #include <omp.h>
 #include <mpi.h>
 
+
 using namespace std;
 
 typedef struct positionArray{
@@ -35,14 +36,21 @@ int main(int argc, char *argv[]) {
     int nFrames;
     int framePos;
 
-    positionArray *Rv;
-    positionArray *Ra;
     positionArray **RvArray;
     positionArray **RaArray;
 
     int maxBlocks = width * height / 64;
     int size = 0;
     double begin = 0, end = 0;
+
+    if ((totalFrames - 1) % world_size != 0) {
+        if (world_rank == 0) {
+            printf("Error: The number of frames (%d) must be divisible by the number of nodes\n", totalFrames - 1);  
+        }
+
+        MPI_Finalize();
+        return 0;
+    }
 
     omp_set_num_threads(4);
 
@@ -85,24 +93,20 @@ int main(int argc, char *argv[]) {
     begin = omp_get_wtime();
     
     // Para cada quadro, executa fullSearch
-    #pragma omp parallel for shared(frames, fp, width, height, maxBlocks, RvArray, RaArray) private(size) lastprivate(Ra, Rv)
-    for (frameI = startFrame; frameI < endFrame; frameI++){
-        framePos = frameI - startFrame;
+    #pragma omp parallel for shared(frames, fp, width, height, maxBlocks, RvArray, RaArray) private(size)
+        for (frameI = startFrame; frameI < endFrame; frameI++) {
+            framePos = frameI - startFrame;
 
-        printf("Processando frame %d\t[Rank %d]\t[Thread %d]\n", 
-               frameI + 1, omp_get_thread_num(), world_rank);
+            printf("Processando frame %d\t[Rank %d]\t[Thread %d]\n", 
+                frameI + 1, world_rank, omp_get_thread_num());
 
-        // Rv e Ra guardam resultados do fullSearch
-        Rv = (positionArray *)malloc(sizeof(positionArray) * maxBlocks);
-        Ra = (positionArray *)malloc(sizeof(positionArray) * maxBlocks);
+            // Rv e Ra guardam resultados do fullSearch
+            RvArray[framePos] = (positionArray *)malloc(sizeof(positionArray) * maxBlocks);
+            RaArray[framePos] = (positionArray *)malloc(sizeof(positionArray) * maxBlocks);
 
-        // Executa fullSearch
-        size = fullSearch(frameRef, frames[framePos], Rv, Ra);
-
-        // Guarda resultados em array
-        RvArray[framePos] = Rv;
-        RaArray[framePos] = Ra;
-    }
+            // Executa fullSearch
+            size = fullSearch(frameRef, frames[framePos], RvArray[framePos], RaArray[framePos]);
+        }
 
     end = omp_get_wtime();
 
@@ -111,33 +115,40 @@ int main(int argc, char *argv[]) {
     MPI_Datatype tstype;
     defineStruct(&tstype);
 
-    // if (world_rank == 0) {
-    //     positionArray **RvArrayFinal;
-    //     positionArray **RaArrayFinal;
+    positionArray *numbers;
 
-    //     RvArrayFinal = (positionArray **)malloc(sizeof *RvArrayFinal * totalFrames);
-    //     RaArrayFinal = (positionArray **)malloc(sizeof *RaArrayFinal * totalFrames);
+    if (world_rank == 0) {
+        positionArray **RvArrayFinal;
+        positionArray **RaArrayFinal;
 
-    //     // Copia resultados do rank 0
-    //     for (frameI = 0; frameI < nFrames; frameI++) {
-    //         RvArrayFinal[frameI] = RvArray[frameI];
-    //         RaArrayFinal[frameI] = RaArray[frameI];
-    //     }
+        RvArrayFinal = (positionArray **)malloc(sizeof *RvArrayFinal * totalFrames);
+        RaArrayFinal = (positionArray **)malloc(sizeof *RaArrayFinal * totalFrames);
 
-    //     // Recebe resultados dos outros ranks
-    //     for (int rank = 1; rank < world_size; rank++) {
-    //         for (frameI = 0; frameI < nFrames; frameI++) {
-    //             MPI_Recv(RvArrayFinal[rank * nFrames + frameI], maxBlocks, tstype, rank, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
-    //             MPI_Recv(RaArrayFinal[rank * nFrames + frameI], maxBlocks, tstype, rank, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
-    //         }        
-    //     }
-    // } else {
-    //     // Envia resultados para rank 0
-    //     for (frameI = 0; frameI < nFrames; frameI++) {
-    //         MPI_Send(RvArray[frameI], maxBlocks, tstype, 0, 0, MPI_COMM_WORLD);
-    //         MPI_Send(RaArray[frameI], maxBlocks, tstype, 0, 0, MPI_COMM_WORLD);
-    //     }
-    // }
+        // Copia resultados do rank 0
+        for (frameI = 0; frameI < nFrames; frameI++) {
+            RvArrayFinal[frameI] = RvArray[frameI];
+            RaArrayFinal[frameI] = RaArray[frameI];
+        }
+
+        // Recebe resultados dos outros ranks
+        for (int rank = 1; rank < world_size; rank++) {
+            for (frameI = 0; frameI < nFrames; frameI++) {  
+                // printf("Recebendo resultados do rank %d\t[Rank %d]\n", rank, world_rank);            
+                RvArrayFinal[rank * nFrames + frameI] = (positionArray *)malloc(sizeof(positionArray) * maxBlocks);
+                RaArrayFinal[rank * nFrames + frameI] = (positionArray *)malloc(sizeof(positionArray) * maxBlocks);
+
+                MPI_Recv(RvArrayFinal[rank * nFrames + frameI], maxBlocks, tstype, rank, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+                MPI_Recv(RaArrayFinal[rank * nFrames + frameI], maxBlocks, tstype, rank, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+            }        
+        }
+    } else {
+        // Envia resultados para rank 0
+        for (frameI = 0; frameI < nFrames; frameI++) {
+            // printf("Enviando resultados para rank 0\t[Rank %d]\n", world_rank);
+            MPI_Send(RvArray[frameI], maxBlocks, tstype, 0, 0, MPI_COMM_WORLD);
+            MPI_Send(RaArray[frameI], maxBlocks, tstype, 0, 0, MPI_COMM_WORLD);
+        }
+    }
 
     MPI_Type_free(&tstype);
     MPI_Finalize();
