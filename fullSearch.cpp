@@ -45,7 +45,7 @@ int main(int argc, char *argv[]) {
 
     if ((totalFrames - 1) % world_size != 0) {
         if (world_rank == 0) {
-            printf("Error: The number of frames (%d) must be divisible by the number of nodes\n", totalFrames - 1);  
+            printf("Erro: O número de quadros (%d) deve ser dividível pelo número de nós\n", totalFrames - 1);  
         }
 
         MPI_Finalize();
@@ -78,7 +78,6 @@ int main(int argc, char *argv[]) {
     for (frameI = startFrame; frameI < endFrame; frameI++)
     {
         framePos = frameI - startFrame;
-        // printf("[Rank %d] frames[%d] = Frame %d\n", world_rank, framePos, frameI);
         frames[framePos] = (unsigned char **)malloc(sizeof(**frames) * height);
         readFrame(fp, frameI, frames[framePos], width, height);
     }
@@ -115,12 +114,10 @@ int main(int argc, char *argv[]) {
     MPI_Datatype tstype;
     defineStruct(&tstype);
 
-    positionArray *numbers;
+    positionArray **RvArrayFinal;
+    positionArray **RaArrayFinal;
 
     if (world_rank == 0) {
-        positionArray **RvArrayFinal;
-        positionArray **RaArrayFinal;
-
         RvArrayFinal = (positionArray **)malloc(sizeof(*RvArrayFinal) * totalFrames);
         RaArrayFinal = (positionArray **)malloc(sizeof(*RaArrayFinal) * totalFrames);
 
@@ -133,7 +130,6 @@ int main(int argc, char *argv[]) {
         // Recebe resultados dos outros ranks
         for (int rank = 1; rank < world_size; rank++) {
             for (frameI = 0; frameI < nFrames; frameI++) {  
-                // printf("Recebendo resultados do rank %d\t[Rank %d]\n", rank, world_rank);            
                 RvArrayFinal[rank * nFrames + frameI] = (positionArray *)malloc(sizeof(positionArray) * maxBlocks);
                 RaArrayFinal[rank * nFrames + frameI] = (positionArray *)malloc(sizeof(positionArray) * maxBlocks);
 
@@ -144,10 +140,22 @@ int main(int argc, char *argv[]) {
     } else {
         // Envia resultados para rank 0
         for (frameI = 0; frameI < nFrames; frameI++) {
-            // printf("Enviando resultados para rank 0\t[Rank %d]\n", world_rank);
             MPI_Send(RvArray[frameI], maxBlocks, tstype, 0, frameI, MPI_COMM_WORLD);
             MPI_Send(RaArray[frameI], maxBlocks, tstype, 0, frameI, MPI_COMM_WORLD);
         }
+    }
+
+    // Escreve resultados em arquivo
+    if (world_rank == 0) {
+        FILE *fp;
+        fp = fopen("coded_video.bin", "wb");
+
+        for (frameI = 0; frameI < totalFrames - 1; frameI++) {
+            fwrite(RvArrayFinal[frameI], sizeof(positionArray), maxBlocks, fp);
+            fwrite(RaArrayFinal[frameI], sizeof(positionArray), maxBlocks, fp);
+        }
+
+        fclose(fp);
     }
 
     MPI_Type_free(&tstype);

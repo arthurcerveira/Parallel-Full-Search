@@ -1,4 +1,4 @@
-# Algoritmo Full Search implementado com OpenMP
+# Algoritmo Full Search implementado com MPI e OpenMP
 
 Arthur Cerveira e Raquel Zimmer
 
